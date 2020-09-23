@@ -1,9 +1,8 @@
 import argparse
-import os
-from abc import ABC
-
 import numpy as np
+import os
 import torch
+from abc import ABC
 from torch.nn import Conv2d, MaxPool2d, ReLU, Linear, Module
 from torch.nn.functional import cross_entropy
 from torch.optim import SGD, Adam
@@ -168,19 +167,25 @@ def main():
     torch.manual_seed(seed=arguments.seed)
     np.random.seed(arguments.seed)
 
+    # mean
+    mean = 0.1307
+
+    # standard deviation
+    std = 0.3081
+
     # dataset
     train_dataset = MNIST(root=paths['datasets'],
                           train=True,
                           download=True,
                           transform=Compose([Resize((32, 32)),
                                              ToTensor(),
-                                             Normalize((0.1307,), (0.3081,))]))
+                                             Normalize((mean,), (std,))]))
 
     test_dataset = MNIST(root=paths['datasets'],
                          train=False,
                          transform=Compose([Resize((32, 32)),
                                             ToTensor(),
-                                            Normalize((0.1307,), (0.3081,))]))
+                                            Normalize((mean,), (std,))]))
 
     # loader
     train_loader = DataLoader(dataset=train_dataset,
