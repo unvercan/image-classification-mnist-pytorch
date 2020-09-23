@@ -1,0 +1,4 @@
+/.idea/
+/datasets/MNIST/
+/epochs/*.pkl
+/*.iml
