@@ -16,35 +16,35 @@ class CNN(Module, ABC):
     def __init__(self):
         super(CNN, self).__init__()
         self.conv_1 = Conv2d(in_channels=1,
-                             out_channels=8,
+                             out_channels=16,
                              stride=1,
-                             kernel_size=3,
-                             padding=1)  # 1x32x32 -> 8x32x32
+                             kernel_size=5,
+                             padding=0)  # 1x32x32 -> 16x28x28
+        self.relu_1 = ReLU(inplace=False)
         self.pool_1 = MaxPool2d(stride=2,
                                 kernel_size=2,
-                                padding=0)  # 8x32x32 -> 8x16x16
-        self.relu_1 = ReLU(inplace=False)
-        self.conv_2 = Conv2d(in_channels=8,
-                             out_channels=8,
+                                padding=0)  # 16x28x28 -> 16x14x14
+        self.conv_2 = Conv2d(in_channels=16,
+                             out_channels=16,
                              stride=1,
-                             kernel_size=3,
-                             padding=1)  # 8x16x16 -> 8x16x16
+                             kernel_size=5,
+                             padding=0)  # 16x14x14 -> 16x10x10
+        self.relu_2 = ReLU(inplace=False)
         self.pool_2 = MaxPool2d(stride=2,
                                 kernel_size=2,
-                                padding=0)  # 8x16x16 -> 8x8x8
-        self.relu_2 = ReLU(inplace=False)
-        self.fc = Linear(in_features=(8 * 8 * 8),
-                         out_features=10)  # 8x8x8 -> 10
+                                padding=0)  # 16x10x10 -> 16x5x5
+        self.fc = Linear(in_features=(16 * 5 * 5),
+                         out_features=10)  # 16x5x5 -> 10
         self.softmax = Softmax(dim=1)
 
     def forward(self, x):
         x = self.conv_1(x)
-        x = self.pool_1(x)
         x = self.relu_1(x)
+        x = self.pool_1(x)
         x = self.conv_2(x)
-        x = self.pool_2(x)
         x = self.relu_2(x)
-        x = x.view(-1, (8 * 8 * 8))  # [Batch, Channel, Height, Width] -> [Batch, (Channel * Height * Width)]
+        x = self.pool_2(x)
+        x = x.view(-1, (16 * 5 * 5))  # [Batch, Channel, Height, Width] -> [Batch, (Channel * Height * Width)]
         x = self.fc(x)
         x = self.softmax(x)
         return x
@@ -146,9 +146,9 @@ def main():
     argument_parser = argparse.ArgumentParser()
 
     # argument parser
-    argument_parser.add_argument('--train-batch-size', type=int, default=1000, help='batch size for training')
-    argument_parser.add_argument('--test-batch-size', type=int, default=1000, help='batch size for testing')
-    argument_parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
+    argument_parser.add_argument('--train-batch-size', type=int, default=2000, help='batch size for training')
+    argument_parser.add_argument('--test-batch-size', type=int, default=2000, help='batch size for testing')
+    argument_parser.add_argument('--epochs', type=int, default=15, help='number of epochs')
     argument_parser.add_argument('--optimizer', type=str, default='adam', help='optimizer')
     argument_parser.add_argument('--learning-rate', type=float, default=1e-4, help='learning rate')
     argument_parser.add_argument('--momentum', type=float, default=0.9, help='SGD momentum')
@@ -211,7 +211,7 @@ def main():
                         lr=arguments.learning_rate,
                         momentum=arguments.momentum)
 
-    print('{} CNN {}'.format('=' * 10, '=' * 10))
+    print('{} CNN on MNIST {}'.format('=' * 10, '=' * 10))
 
     # epochs
     for epoch_number in range(1, arguments.epochs + 1):
