@@ -3,7 +3,7 @@ import numpy as np
 import os
 import torch
 from abc import ABC
-from torch.nn import Conv2d, MaxPool2d, ReLU, Linear, Module
+from torch.nn import Conv2d, MaxPool2d, ReLU, Linear, Module, Softmax
 from torch.nn.functional import cross_entropy
 from torch.optim import SGD, Adam
 from torch.utils.data import DataLoader
@@ -25,16 +25,17 @@ class CNN(Module, ABC):
                                 padding=0)  # 8x32x32 -> 8x16x16
         self.relu_1 = ReLU(inplace=False)
         self.conv_2 = Conv2d(in_channels=8,
-                             out_channels=16,
+                             out_channels=8,
                              stride=1,
                              kernel_size=3,
-                             padding=1)  # 8x16x16 -> 16x16x16
+                             padding=1)  # 8x16x16 -> 8x16x16
         self.pool_2 = MaxPool2d(stride=2,
                                 kernel_size=2,
-                                padding=0)  # 16x16x16-> 16x8x8
+                                padding=0)  # 8x16x16 -> 8x8x8
         self.relu_2 = ReLU(inplace=False)
-        self.fc = Linear(in_features=(16 * 8 * 8),
-                         out_features=10)  # 16x8x8 -> 10
+        self.fc = Linear(in_features=(8 * 8 * 8),
+                         out_features=10)  # 8x8x8 -> 10
+        self.softmax = Softmax(dim=1)
 
     def forward(self, x):
         x = self.conv_1(x)
@@ -43,8 +44,9 @@ class CNN(Module, ABC):
         x = self.conv_2(x)
         x = self.pool_2(x)
         x = self.relu_2(x)
-        x = x.view(-1, (16 * 8 * 8))  # [Batch, Channel, Height, Width] -> [Batch, (Channel * Height * Width)]
+        x = x.view(-1, (8 * 8 * 8))  # [Batch, Channel, Height, Width] -> [Batch, (Channel * Height * Width)]
         x = self.fc(x)
+        x = self.softmax(x)
         return x
 
 
@@ -115,7 +117,6 @@ def test(model, device, loader):
                                                                  batch_correct=batch_correct,
                                                                  batch_accuracy=batch_accuracy,
                                                                  batch_loss=batch_loss))
-
     epoch_loss = sum(batch_losses) / samples
     epoch_correct = sum(batch_corrects)
     epoch_accuracy = 100.0 * (sum(batch_corrects) / samples)
@@ -145,8 +146,8 @@ def main():
     argument_parser = argparse.ArgumentParser()
 
     # argument parser
-    argument_parser.add_argument('--train-batch-size', type=int, default=2000, help='batch size for training')
-    argument_parser.add_argument('--test-batch-size', type=int, default=2000, help='batch size for testing')
+    argument_parser.add_argument('--train-batch-size', type=int, default=1000, help='batch size for training')
+    argument_parser.add_argument('--test-batch-size', type=int, default=1000, help='batch size for testing')
     argument_parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
     argument_parser.add_argument('--optimizer', type=str, default='adam', help='optimizer')
     argument_parser.add_argument('--learning-rate', type=float, default=1e-4, help='learning rate')
@@ -179,13 +180,13 @@ def main():
                           download=True,
                           transform=Compose([Resize((32, 32)),
                                              ToTensor(),
-                                             Normalize((mean,), (std,))]))
+                                             Normalize(mean=mean, std=std)]))
 
     test_dataset = MNIST(root=paths['datasets'],
                          train=False,
                          transform=Compose([Resize((32, 32)),
                                             ToTensor(),
-                                            Normalize((mean,), (std,))]))
+                                            Normalize(mean=mean, std=std)]))
 
     # loader
     train_loader = DataLoader(dataset=train_dataset,
