@@ -85,14 +85,17 @@ def train(model, device, loader, optimizer):
         batch_prediction = batch_output.max(dim=1, keepdim=True)[1]
         batch_correct = batch_prediction.eq(batch_target.view_as(other=batch_prediction)).sum().item()
         batch_corrects.append(batch_correct)
+        batch_accuracy = 100. * batch_correct / batch_size
         optimizer.step()
         print('Batch: [{batch_no}/{batches}], '
               'Processed=[{processed_samples}/{samples}], '
-              'Loss={batch_loss:.6f}'.format(batch_no=batch_no,
-                                             batches=batches,
-                                             processed_samples=processed_samples,
-                                             samples=samples,
-                                             batch_loss=batch_loss))
+              'Loss={batch_loss:.6f}, '
+              'Accuracy={batch_accuracy:.0f}%'.format(batch_no=batch_no,
+                                                      batches=batches,
+                                                      processed_samples=processed_samples,
+                                                      samples=samples,
+                                                      batch_loss=batch_loss,
+                                                      batch_accuracy=batch_accuracy))
     epoch_loss = sum(batch_losses) / samples
     epoch_correct = sum(batch_corrects)
     epoch_accuracy = 100.0 * (sum(batch_corrects) / samples)
