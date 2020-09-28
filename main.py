@@ -12,104 +12,62 @@ from torchvision.datasets.mnist import MNIST
 from torchvision.transforms import Compose, ToTensor, Normalize, Resize
 
 
-# model
-class CNN(Module, ABC):
-    def __init__(self):
-        super(CNN, self).__init__()
-        self.conv_1 = Conv2d(in_channels=1,
-                             out_channels=4,
-                             stride=1,
-                             kernel_size=5,
-                             padding=0)  # 1x32x32 -> 4x28x28
-        self.bn_1 = BatchNorm2d(4)
-        self.relu_1 = ReLU(inplace=False)
-        self.pool_1 = MaxPool2d(stride=2,
-                                kernel_size=2,
-                                padding=0)  # 4x28x28 -> 4x14x14
-        self.drop_1 = Dropout(0.1)
-        self.conv_2 = Conv2d(in_channels=4,
-                             out_channels=8,
-                             stride=1,
-                             kernel_size=5,
-                             padding=0)  # 4x14x14 -> 8x10x10
-        self.bn_2 = BatchNorm2d(8)
-        self.relu_2 = ReLU(inplace=False)
-        self.pool_2 = MaxPool2d(stride=2,
-                                kernel_size=2,
-                                padding=0)  # 8x10x10 -> 8x5x5
-        self.drop_2 = Dropout(0.1)
-        self.fc = Linear(in_features=(8 * 5 * 5),
-                         out_features=10)  # 8x5x5 -> 10
-        self.softmax = Softmax(dim=1)
-
-    def forward(self, x):
-        x = self.conv_1(x)
-        x = self.bn_1(x)
-        x = self.relu_1(x)
-        x = self.pool_1(x)
-        x = self.drop_1(x)
-        x = self.conv_2(x)
-        x = self.bn_2(x)
-        x = self.relu_2(x)
-        x = self.pool_2(x)
-        x = self.drop_2(x)
-        x = x.view(-1, (8 * 5 * 5))  # [Batch, Channel, Height, Width] -> [Batch, (Channel * Height * Width)]
-        x = self.fc(x)
-        x = self.softmax(x)
-        return x
-
-
-# train
-def train(model, device, loader, optimizer):
-    batches = len(loader)
-    samples = len(loader.dataset)
+# train epoch
+def train_epoch(model, device, loader, optimizer, make_prediction=False, show_batch_info=True, show_epoch_info=True):
+    number_of_batches = len(loader)
     model.train()
-    batch_losses = []
-    batch_corrects = []
+    epoch_info = dict()
+    epoch_info['samples'] = len(loader.dataset)
+    batch_infos = []
     processed_samples = 0
     for batch_index, batch in enumerate(iterable=loader):
-        batch_no = batch_index + 1
         batch_data, batch_target = batch
-        batch_size = len(batch_data)
-        processed_samples += batch_size
-        batch_data, batch_target = batch_data.to(device=device), batch_target.to(device=device)
-        optimizer.zero_grad()
-        if batch_data.dim() == 3:
-            batch_data = batch_data.unsqueeze(dim=1)  # [batch, height, width] -> [batch, channel, height, width]
-        batch_output = model(batch_data)
-        batch_loss = cross_entropy(input=batch_output,
-                                   target=batch_target)
-        batch_loss.backward()
-        batch_loss = batch_loss.item()
-        batch_losses.append(batch_loss)
+        batch_info = train_batch(batch_data=batch_data, batch_target=batch_target, model=model,
+                                 device=device, optimizer=optimizer, make_prediction=make_prediction)
+        batch_infos.append(batch_info)
+        processed_samples += batch_info['size']
+        if show_batch_info:
+            print('Batch: [{batch_no}/{number_of_batches}], '
+                  'Processed=[{processed_samples}/{samples}], '
+                  'Loss={batch_loss:.6f}'
+                  .format(batch_no=(batch_index + 1),
+                          number_of_batches=number_of_batches,
+                          processed_samples=processed_samples,
+                          samples=epoch_info['samples'],
+                          batch_loss=batch_info['loss']))
+    epoch_info['batches'] = batch_infos
+    epoch_info['loss'] = sum(batch_info['loss'] for batch_info in batch_infos) / epoch_info['samples']
+    if make_prediction:
+        epoch_info['correct'] = sum(batch_info['correct'] for batch_info in batch_infos)
+        epoch_info['accuracy'] = 100.0 * (epoch_info['correct'] / epoch_info['samples'])
+    if show_epoch_info:
+        print('Epoch: Samples={epoch_samples}, Loss={epoch_loss:.4f}'
+              .format(epoch_loss=epoch_info['loss'], epoch_samples=epoch_info['samples']))
+    return epoch_info
+
+
+# train batch
+def train_batch(batch_data, batch_target, model, device, optimizer, make_prediction=False):
+    batch_info = dict()
+    batch_info['size'] = len(batch_data)
+    batch_data, batch_target = batch_data.to(device=device), batch_target.to(device=device)
+    optimizer.zero_grad()
+    if batch_data.dim() == 3:
+        batch_data = batch_data.unsqueeze(dim=1)  # [batch, height, width] -> [batch, channel, height, width]
+    batch_output = model(batch_data)
+    batch_loss = cross_entropy(input=batch_output, target=batch_target)
+    batch_loss.backward()
+    batch_info['loss'] = batch_loss.item()
+    if make_prediction:
         batch_prediction = batch_output.max(dim=1, keepdim=True)[1]
-        batch_correct = batch_prediction.eq(batch_target.view_as(other=batch_prediction)).sum().item()
-        batch_corrects.append(batch_correct)
-        batch_accuracy = 100. * batch_correct / batch_size
-        optimizer.step()
-        print('Batch: [{batch_no}/{batches}], '
-              'Processed=[{processed_samples}/{samples}], '
-              'Loss={batch_loss:.6f}, '
-              'Accuracy={batch_accuracy:.0f}%'.format(batch_no=batch_no,
-                                                      batches=batches,
-                                                      processed_samples=processed_samples,
-                                                      samples=samples,
-                                                      batch_loss=batch_loss,
-                                                      batch_accuracy=batch_accuracy))
-    epoch_loss = sum(batch_losses) / samples
-    epoch_correct = sum(batch_corrects)
-    epoch_accuracy = 100.0 * (sum(batch_corrects) / samples)
-    print('Epoch:',
-          'Loss={epoch_loss:.4f}, '
-          'Correct=[{epoch_correct}/{samples}], '
-          'Accuracy={epoch_accuracy:.0f}%'.format(epoch_loss=epoch_loss,
-                                                  epoch_correct=epoch_correct,
-                                                  epoch_accuracy=epoch_accuracy,
-                                                  samples=samples))
+        batch_info['correct'] = batch_prediction.eq(batch_target.view_as(other=batch_prediction)).sum().item()
+        batch_info['accuracy'] = 100. * batch_info['correct'] / batch_info['size']
+    optimizer.step()
+    return batch_info
 
 
-# test
-def test(model, device, loader):
+# test epoch
+def test_epoch(model, device, loader):
     batches = len(loader)
     samples = len(loader.dataset)
     model.eval()
@@ -158,6 +116,53 @@ def test(model, device, loader):
                                                       samples=samples))
 
 
+# model
+class CNN(Module, ABC):
+    def __init__(self):
+        super(CNN, self).__init__()
+        self.conv_1 = Conv2d(in_channels=1,
+                             out_channels=4,
+                             stride=1,
+                             kernel_size=5,
+                             padding=0)  # 1x32x32 -> 4x28x28
+        self.bn_1 = BatchNorm2d(4)
+        self.relu_1 = ReLU(inplace=False)
+        self.pool_1 = MaxPool2d(stride=2,
+                                kernel_size=2,
+                                padding=0)  # 4x28x28 -> 4x14x14
+        self.drop_1 = Dropout(0.1)
+        self.conv_2 = Conv2d(in_channels=4,
+                             out_channels=8,
+                             stride=1,
+                             kernel_size=5,
+                             padding=0)  # 4x14x14 -> 8x10x10
+        self.bn_2 = BatchNorm2d(8)
+        self.relu_2 = ReLU(inplace=False)
+        self.pool_2 = MaxPool2d(stride=2,
+                                kernel_size=2,
+                                padding=0)  # 8x10x10 -> 8x5x5
+        self.drop_2 = Dropout(0.1)
+        self.fc = Linear(in_features=(8 * 5 * 5),
+                         out_features=10)  # 8x5x5 -> 10
+        self.softmax = Softmax(dim=1)
+
+    def forward(self, x):
+        x = self.conv_1(x)
+        x = self.bn_1(x)
+        x = self.relu_1(x)
+        x = self.pool_1(x)
+        x = self.drop_1(x)
+        x = self.conv_2(x)
+        x = self.bn_2(x)
+        x = self.relu_2(x)
+        x = self.pool_2(x)
+        x = self.drop_2(x)
+        x = x.view(-1, (8 * 5 * 5))  # [Batch, Channel, Height, Width] -> [Batch, (Channel * Height * Width)]
+        x = self.fc(x)
+        x = self.softmax(x)
+        return x
+
+
 # main
 def main():
     # paths
@@ -180,7 +185,7 @@ def main():
     argument_parser.add_argument('--test-batch-size', type=int, default=2000, help='batch size for testing')
     argument_parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
     argument_parser.add_argument('--learning-rate', type=float, default=1e-3, help='learning rate')
-    argument_parser.add_argument('--cuda', type=bool, default=False, help='enable CUDA training')
+    argument_parser.add_argument('--cuda', type=bool, default=True, help='enable CUDA training')
     argument_parser.add_argument('--seed', type=int, default=1, help='random seed')
 
     # arguments
@@ -242,10 +247,7 @@ def main():
                                                                epochs=arguments.epochs))
 
         # train
-        train(model=model,
-              device=device,
-              loader=train_loader,
-              optimizer=optimizer)
+        train_epoch_info = train_epoch(model=model, device=device, loader=train_loader, optimizer=optimizer)
 
         # break
         print('{}'.format('*' * 100))
@@ -255,9 +257,7 @@ def main():
                                                               epochs=arguments.epochs))
 
         # test
-        test(model=model,
-             device=device,
-             loader=test_loader)
+        test_epoch(model=model, device=device, loader=test_loader)
 
         # break
         print('{}'.format('*' * 100))
