@@ -1,4 +1,5 @@
 /.idea/
-/datasets/MNIST/
-/epochs/*.pkl
+/dataset/
+/weight/
 /*.iml
+/train/
