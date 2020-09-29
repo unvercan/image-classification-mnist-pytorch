@@ -1,11 +1,11 @@
 # imports
-import argparse
-import os
 from abc import ABC
-
+from argparse import ArgumentParser
+from collections import OrderedDict
+from os import path, makedirs
 import numpy as np
 import torch
-from torch.nn import Conv2d, MaxPool2d, Dropout, ReLU, Linear, BatchNorm2d, Module, Softmax
+from torch.nn import Conv2d, MaxPool2d, Dropout, ReLU, Linear, BatchNorm2d, Module, Softmax, Flatten, Sequential
 from torch.nn.functional import cross_entropy
 from torch.optim import Adam
 from torch.utils.data import DataLoader
@@ -112,34 +112,32 @@ def test_epoch(model, device, loader):
 class CNN(Module, ABC):
     def __init__(self):
         super(CNN, self).__init__()
-        self.conv_1 = Conv2d(in_channels=1, out_channels=4, stride=1, kernel_size=5, padding=0)  # 1x32x32 -> 4x28x28
-        self.bn_1 = BatchNorm2d(4)
-        self.relu_1 = ReLU(inplace=False)
-        self.pool_1 = MaxPool2d(stride=2, kernel_size=2, padding=0)  # 4x28x28 -> 4x14x14
-        self.drop_1 = Dropout(0.1)
-        self.conv_2 = Conv2d(in_channels=4, out_channels=8, stride=1, kernel_size=5, padding=0)  # 4x14x14 -> 8x10x10
-        self.bn_2 = BatchNorm2d(8)
-        self.relu_2 = ReLU(inplace=False)
-        self.pool_2 = MaxPool2d(stride=2, kernel_size=2, padding=0)  # 8x10x10 -> 8x5x5
-        self.drop_2 = Dropout(0.1)
-        self.fc = Linear(in_features=(8 * 5 * 5), out_features=10)  # 8x5x5 -> 10
-        self.softmax = Softmax(dim=1)
+        self.feature_extraction = Sequential(
+            OrderedDict([
+                ('conv_1', Conv2d(in_channels=1, out_channels=4, stride=1, kernel_size=5, padding=0)),  # 4x28x28
+                ('bn_1', BatchNorm2d(num_features=4)),
+                ('relu_1', ReLU(inplace=False)),
+                ('pool_1', MaxPool2d(stride=2, kernel_size=2, padding=0)),  # 4x14x14
+                ('drop_1', Dropout(p=0.1)),
+                ('conv_2', Conv2d(in_channels=4, out_channels=8, stride=1, kernel_size=5, padding=0)),  # 8x10x10
+                ('bn_2', BatchNorm2d(num_features=8)),
+                ('relu_2', ReLU(inplace=False)),
+                ('pool_2', MaxPool2d(stride=2, kernel_size=2, padding=0)),  # 8x5x5
+                ('drop_2', Dropout(p=0.1)),
+                ('flatten', Flatten(start_dim=1))
+            ])
+        )
+        self.classifier = Sequential(
+            OrderedDict([
+                ('fc', Linear(in_features=(8 * 5 * 5), out_features=10)),  # 10
+                ('softmax', Softmax(dim=1))
+            ])
+        )
 
     def forward(self, x):
-        x = self.conv_1(x)
-        x = self.bn_1(x)
-        x = self.relu_1(x)
-        x = self.pool_1(x)
-        x = self.drop_1(x)
-        x = self.conv_2(x)
-        x = self.bn_2(x)
-        x = self.relu_2(x)
-        x = self.pool_2(x)
-        x = self.drop_2(x)
-        x = x.view(-1, (8 * 5 * 5))  # [Batch, Channel, Height, Width] -> [Batch, (Channel * Height * Width)]
-        x = self.fc(x)
-        x = self.softmax(x)
-        return x
+        features = self.feature_extraction(x)
+        classes = self.classifier(features)
+        return classes
 
 
 # main
@@ -147,18 +145,18 @@ def main():
     # paths
     paths = dict()
     paths['project'] = '.'
-    paths['dataset'] = os.path.join(paths['project'], 'dataset')
-    paths['weight'] = os.path.join(paths['project'], 'weight')
-    paths['train'] = os.path.join(paths['project'], 'train')
+    paths['dataset'] = path.join(paths['project'], 'dataset')
+    paths['weight'] = path.join(paths['project'], 'weight')
+    paths['train'] = path.join(paths['project'], 'train')
 
     # make directories if not exist
     for key in paths.keys():
         value = paths[key]
-        if not os.path.exists(value):
-            os.makedirs(value)
+        if not path.exists(value):
+            makedirs(value)
 
     # settings
-    argument_parser = argparse.ArgumentParser()
+    argument_parser = ArgumentParser()
 
     # argument parser
     argument_parser.add_argument('--train-batch-size', type=int, default=2000, help='batch size for training')
@@ -207,6 +205,11 @@ def main():
 
     # info
     print('{} CNN on MNIST {}'.format('=' * 45, '=' * 45))
+    print('Feature extraction: {feature_extraction_layers}'.format(feature_extraction_layers=model.feature_extraction))
+    print('Classifier: {classifier_layers}'.format(classifier_layers=model.classifier))
+
+    # break line
+    print('{}'.format('*' * 100))
 
     # epochs
     for epoch_number in range(1, arguments.epochs + 1):
@@ -216,9 +219,22 @@ def main():
         # train epoch
         train_info = train_epoch(model=model, device=device, loader=train_loader, optimizer=optimizer)
 
+        # break line
+        print('{}'.format('*' * 100))
+
+        # save weight
+        weight_file = 'mnist_cnn_weight_epoch_{epoch_number}.pkl'.format(epoch_number=epoch_number)
+        weight_file_path = path.join(paths['weight'], weight_file)
+        torch.save(obj=model.state_dict(), f=weight_file_path)
+        print('"{weight_file}" file is saved as "{weight_file_path}".'
+              .format(weight_file=weight_file, weight_file_path=weight_file_path))
+
+        # break line
+        print('{}'.format('*' * 100))
+
         # save train info
         train_info_file = 'mnist_cnn_train_epoch_{epoch_number}.npy'.format(epoch_number=epoch_number)
-        train_info_file_path = os.path.join(paths['train'], train_info_file)
+        train_info_file_path = path.join(paths['train'], train_info_file)
         np.save(file=train_info_file_path, arr=np.array(train_info))
         print('"{train_info_file}" file is saved as "{train_info_file_path}".'
               .format(train_info_file=train_info_file, train_info_file_path=train_info_file_path))
@@ -231,16 +247,6 @@ def main():
 
         # test epoch
         test_epoch(model=model, device=device, loader=test_loader)
-
-        # break line
-        print('{}'.format('*' * 100))
-
-        # save weight
-        weight_file = 'mnist_cnn_weight_epoch_{epoch_number}.pkl'.format(epoch_number=epoch_number)
-        weight_file_path = os.path.join(paths['weight'], weight_file)
-        torch.save(obj=model.state_dict(), f=weight_file_path)
-        print('"{weight_file}" file is saved as "{weight_file_path}".'
-              .format(weight_file=weight_file, weight_file_path=weight_file_path))
 
         # break line
         print('{}'.format('*' * 100))
