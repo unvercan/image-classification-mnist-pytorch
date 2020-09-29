@@ -1,9 +1,10 @@
 # imports
 import argparse
-import numpy as np
 import os
-import torch
 from abc import ABC
+
+import numpy as np
+import torch
 from torch.nn import Conv2d, MaxPool2d, Dropout, ReLU, Linear, BatchNorm2d, Module, Softmax
 from torch.nn.functional import cross_entropy
 from torch.optim import Adam
@@ -30,10 +31,8 @@ def train_epoch(model, device, loader, optimizer, make_prediction=False, show_ba
             print('Batch: [{batch_no}/{number_of_batches}], '
                   'Processed=[{processed_samples}/{samples}], '
                   'Loss={batch_loss:.6f}'
-                  .format(batch_no=(batch_index + 1),
-                          number_of_batches=number_of_batches,
-                          processed_samples=processed_samples,
-                          samples=epoch_info['samples'],
+                  .format(batch_no=(batch_index + 1), number_of_batches=number_of_batches,
+                          processed_samples=processed_samples, samples=epoch_info['samples'],
                           batch_loss=batch_info['loss']))
     epoch_info['batches'] = batch_infos
     epoch_info['loss'] = sum(batch_info['loss'] for batch_info in batch_infos) / epoch_info['samples']
@@ -84,8 +83,7 @@ def test_epoch(model, device, loader):
             if batch_data.dim() == 3:
                 batch_data = batch_data.unsqueeze(dim=1)  # [batch, height, width] -> [batch, channel, height, width]
             batch_output = model(batch_data)
-            batch_loss = cross_entropy(input=batch_output,
-                                       target=batch_target).item()
+            batch_loss = cross_entropy(input=batch_output, target=batch_target).item()
             batch_losses.append(batch_loss)
             batch_prediction = batch_output.max(dim=1, keepdim=True)[1]
             batch_correct = batch_prediction.eq(batch_target.view_as(other=batch_prediction)).sum().item()
@@ -95,14 +93,10 @@ def test_epoch(model, device, loader):
                   'Processed=[{processed_samples}/{samples}], '
                   'Loss={batch_loss:.6f}, '
                   'Correct=[{batch_correct}/{batch_size}], '
-                  'Accuracy={batch_accuracy:.0f}%'.format(batch_no=batch_no,
-                                                          batches=batches,
-                                                          processed_samples=processed_samples,
-                                                          samples=samples,
-                                                          batch_size=batch_size,
-                                                          batch_correct=batch_correct,
-                                                          batch_accuracy=batch_accuracy,
-                                                          batch_loss=batch_loss))
+                  'Accuracy={batch_accuracy:.0f}%'.format(batch_no=batch_no, batches=batches,
+                                                          processed_samples=processed_samples, samples=samples,
+                                                          batch_size=batch_size, batch_correct=batch_correct,
+                                                          batch_accuracy=batch_accuracy, batch_loss=batch_loss))
 
         epoch_loss = sum(batch_losses) / samples
         epoch_correct = sum(batch_corrects)
@@ -110,40 +104,25 @@ def test_epoch(model, device, loader):
         print('Epoch:',
               'Loss={epoch_loss:.4f}, '
               'Correct=[{epoch_correct}/{samples}], '
-              'Accuracy={epoch_accuracy:.0f}%'.format(epoch_loss=epoch_loss,
-                                                      epoch_correct=epoch_correct,
-                                                      epoch_accuracy=epoch_accuracy,
-                                                      samples=samples))
+              'Accuracy={epoch_accuracy:.0f}%'.format(epoch_loss=epoch_loss, epoch_correct=epoch_correct,
+                                                      epoch_accuracy=epoch_accuracy, samples=samples))
 
 
 # model
 class CNN(Module, ABC):
     def __init__(self):
         super(CNN, self).__init__()
-        self.conv_1 = Conv2d(in_channels=1,
-                             out_channels=4,
-                             stride=1,
-                             kernel_size=5,
-                             padding=0)  # 1x32x32 -> 4x28x28
+        self.conv_1 = Conv2d(in_channels=1, out_channels=4, stride=1, kernel_size=5, padding=0)  # 1x32x32 -> 4x28x28
         self.bn_1 = BatchNorm2d(4)
         self.relu_1 = ReLU(inplace=False)
-        self.pool_1 = MaxPool2d(stride=2,
-                                kernel_size=2,
-                                padding=0)  # 4x28x28 -> 4x14x14
+        self.pool_1 = MaxPool2d(stride=2, kernel_size=2, padding=0)  # 4x28x28 -> 4x14x14
         self.drop_1 = Dropout(0.1)
-        self.conv_2 = Conv2d(in_channels=4,
-                             out_channels=8,
-                             stride=1,
-                             kernel_size=5,
-                             padding=0)  # 4x14x14 -> 8x10x10
+        self.conv_2 = Conv2d(in_channels=4, out_channels=8, stride=1, kernel_size=5, padding=0)  # 4x14x14 -> 8x10x10
         self.bn_2 = BatchNorm2d(8)
         self.relu_2 = ReLU(inplace=False)
-        self.pool_2 = MaxPool2d(stride=2,
-                                kernel_size=2,
-                                padding=0)  # 8x10x10 -> 8x5x5
+        self.pool_2 = MaxPool2d(stride=2, kernel_size=2, padding=0)  # 8x10x10 -> 8x5x5
         self.drop_2 = Dropout(0.1)
-        self.fc = Linear(in_features=(8 * 5 * 5),
-                         out_features=10)  # 8x5x5 -> 10
+        self.fc = Linear(in_features=(8 * 5 * 5), out_features=10)  # 8x5x5 -> 10
         self.softmax = Softmax(dim=1)
 
     def forward(self, x):
@@ -168,8 +147,9 @@ def main():
     # paths
     paths = dict()
     paths['project'] = '.'
-    paths['datasets'] = os.path.join(paths['project'], 'datasets')
-    paths['epochs'] = os.path.join(paths['project'], 'epochs')
+    paths['dataset'] = os.path.join(paths['project'], 'dataset')
+    paths['weight'] = os.path.join(paths['project'], 'weight')
+    paths['train'] = os.path.join(paths['project'], 'train')
 
     # make directories if not exist
     for key in paths.keys():
@@ -201,41 +181,29 @@ def main():
     torch.manual_seed(seed=arguments.seed)
     np.random.seed(arguments.seed)
 
-    # mean
+    # dataset mean
     mean = 0.1307
 
-    # standard deviation
+    # dataset standard deviation
     std = 0.3081
 
     # dataset
-    train_dataset = MNIST(root=paths['datasets'],
-                          train=True,
-                          download=True,
-                          transform=Compose([Resize((32, 32)),
-                                             ToTensor(),
-                                             Normalize(mean=mean, std=std)]))
+    train_dataset = MNIST(root=paths['dataset'], train=True, download=True,
+                          transform=Compose([Resize((32, 32)), ToTensor(), Normalize(mean=mean, std=std)]))
 
-    test_dataset = MNIST(root=paths['datasets'],
-                         train=False,
-                         transform=Compose([Resize((32, 32)),
-                                            ToTensor(),
-                                            Normalize(mean=mean, std=std)]))
+    test_dataset = MNIST(root=paths['dataset'], train=False,
+                         transform=Compose([Resize((32, 32)), ToTensor(), Normalize(mean=mean, std=std)]))
 
     # loader
-    train_loader = DataLoader(dataset=train_dataset,
-                              batch_size=arguments.train_batch_size,
-                              shuffle=True)
+    train_loader = DataLoader(dataset=train_dataset, batch_size=arguments.train_batch_size, shuffle=True)
 
-    test_loader = DataLoader(dataset=test_dataset,
-                             batch_size=arguments.test_batch_size,
-                             shuffle=False)
+    test_loader = DataLoader(dataset=test_dataset, batch_size=arguments.test_batch_size, shuffle=False)
 
     # model
     model = CNN().to(device=device)
 
     # optimizer
-    optimizer = Adam(params=model.parameters(),
-                     lr=arguments.learning_rate)
+    optimizer = Adam(params=model.parameters(), lr=arguments.learning_rate)
 
     # info
     print('{} CNN on MNIST {}'.format('=' * 45, '=' * 45))
@@ -243,36 +211,38 @@ def main():
     # epochs
     for epoch_number in range(1, arguments.epochs + 1):
         # train info
-        print('Train: Epoch: [{epoch_number}/{epochs}]'.format(epoch_number=epoch_number,
-                                                               epochs=arguments.epochs))
+        print('Train: Epoch: [{epoch_number}/{epochs}]'.format(epoch_number=epoch_number, epochs=arguments.epochs))
 
-        # train
-        train_epoch_info = train_epoch(model=model, device=device, loader=train_loader, optimizer=optimizer)
+        # train epoch
+        train_info = train_epoch(model=model, device=device, loader=train_loader, optimizer=optimizer)
 
-        # break
+        # save train info
+        train_info_file = 'mnist_cnn_train_epoch_{epoch_number}.npy'.format(epoch_number=epoch_number)
+        train_info_file_path = os.path.join(paths['train'], train_info_file)
+        np.save(file=train_info_file_path, arr=np.array(train_info))
+        print('"{train_info_file}" file is saved as "{train_info_file_path}".'
+              .format(train_info_file=train_info_file, train_info_file_path=train_info_file_path))
+
+        # break line
         print('{}'.format('*' * 100))
 
         # test info
-        print('Test: Epoch: [{epoch_number}/{epochs}]'.format(epoch_number=epoch_number,
-                                                              epochs=arguments.epochs))
+        print('Test: Epoch: [{epoch_number}/{epochs}]'.format(epoch_number=epoch_number, epochs=arguments.epochs))
 
-        # test
+        # test epoch
         test_epoch(model=model, device=device, loader=test_loader)
 
-        # break
+        # break line
         print('{}'.format('*' * 100))
 
-        # save epoch file
-        epoch_file = 'model_epoch_{epoch_number}.pkl'.format(epoch_number=epoch_number)
-        epoch_file_path = os.path.join(paths['epochs'], epoch_file)
-        torch.save(obj=model.state_dict(),
-                   f=epoch_file_path)
+        # save weight
+        weight_file = 'mnist_cnn_weight_epoch_{epoch_number}.pkl'.format(epoch_number=epoch_number)
+        weight_file_path = os.path.join(paths['weight'], weight_file)
+        torch.save(obj=model.state_dict(), f=weight_file_path)
+        print('"{weight_file}" file is saved as "{weight_file_path}".'
+              .format(weight_file=weight_file, weight_file_path=weight_file_path))
 
-        # save info
-        print('"{epoch_file}" file is saved as "{epoch_file_path}".'.format(epoch_file=epoch_file,
-                                                                            epoch_file_path=epoch_file_path))
-
-        # break
+        # break line
         print('{}'.format('*' * 100))
 
 
