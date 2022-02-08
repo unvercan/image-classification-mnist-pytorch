@@ -1,2 +1,2 @@
 # mnist-image-classification-pytorch
-An implementation of MNIST dataset on CNN image classification.
+An implementation of Image Classification on MNIST using PyTorch.
