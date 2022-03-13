@@ -1,1 +1,1 @@
-# image-classification-on-mnist-using-pytorch
+# image-classification-mnist-pytorch
